@@ -23,6 +23,107 @@ def show_image(image, title="Image"):
     plt.axis('off')
     plt.show()
 
+import numpy as np
+import cv2
+from scipy import interpolate
+import matplotlib.pyplot as plt
+from skimage import img_as_float
+from google.colab import files
+from skimage import io
+
+# Function to upload an image
+def upload_image():
+    uploaded = files.upload()
+    for filename in uploaded.keys():
+        image = io.imread(filename)
+        return img_as_float(image)
+
+# Helper function to display images
+def display_images(images, titles):
+    fig, axs = plt.subplots(1, len(images), figsize=(20, 20))
+    for ax, img, title in zip(axs, images, titles):
+        ax.imshow(img)
+        ax.set_title(title)
+        ax.axis('off')
+    plt.show()
+
+# Function to normalize images
+def normalize_image(image):
+    min_val = np.min(image)
+    max_val = np.max(image)
+    return (image - min_val) / (max_val - min_val)
+
+# Function to enhance image contrast
+def enhance_contrast(image, factor=1.5):
+    if len(image.shape) == 3:
+        image = np.mean(image, axis=2)  # Convert to grayscale if needed
+    return np.clip(image * factor, 0, 1)
+
+# Function to adjust brightness
+def adjust_brightness(image, factor=1.2):
+    return np.clip(image * factor, 0, 1)
+
+# ARBH (Adaptive Rational B-spline Hybrid) interpolation
+def ARBH_interpolation(image, scale_factor):
+    result = np.zeros((image.shape[0] * scale_factor, image.shape[1] * scale_factor, image.shape[2]))
+    for c in range(image.shape[2]):
+        x = np.arange(0, image.shape[1])
+        y = np.arange(0, image.shape[0])
+        f = interpolate.RectBivariateSpline(y, x, image[:, :, c])
+        xnew = np.linspace(0, image.shape[1] - 1, image.shape[1] * scale_factor)
+        ynew = np.linspace(0, image.shape[0] - 1, image.shape[0] * scale_factor)
+        result[:, :, c] = f(ynew, xnew)
+    return result
+
+# Laplacian interpolation
+def Laplacian_interpolation(image, scale_factor):
+    result = np.zeros((image.shape[0] * scale_factor, image.shape[1] * scale_factor, image.shape[2]))
+    for c in range(image.shape[2]):
+        upsampled_image = cv2.resize(image[:, :, c], new_size, interpolation=cv2.INTER_LINEAR)
+        laplacian_img = cv2.Laplacian(upsampled_image, cv2.CV_64F)
+        sharpened_img = upsampled_image + laplacian_img
+        result[:, :, c] = np.clip(sharpened_img, 0, 1)  # Ensure pixel values are in the valid range
+    return result
+
+# Upload image
+image = upload_image()
+
+# Resizing parameters
+scale_factor = 2
+new_size = (image.shape[1] * scale_factor, image.shape[0] * scale_factor)
+
+# Bilinear interpolation
+bilinear_img = cv2.resize(image, new_size, interpolation=cv2.INTER_LINEAR)
+
+# Bicubic interpolation
+bicubic_img = cv2.resize(image, new_size, interpolation=cv2.INTER_CUBIC)
+
+# ARBH interpolation
+arbhi_img = ARBH_interpolation(image, scale_factor)
+
+# Laplacian interpolation
+laplacian_img = Laplacian_interpolation(image, scale_factor)
+
+# Normalize images
+image = normalize_image(image)
+bilinear_img = normalize_image(bilinear_img)
+bicubic_img = normalize_image(bicubic_img)
+arbhi_img = normalize_image(arbhi_img)
+laplacian_img = normalize_image(laplacian_img)
+
+# Enhance contrast
+laplacian_img = enhance_contrast(laplacian_img)
+
+# Adjust brightness
+bilinear_img = adjust_brightness(bilinear_img)
+bicubic_img = adjust_brightness(bicubic_img)
+arbhi_img = adjust_brightness(arbhi_img)
+laplacian_img = adjust_brightness(laplacian_img)
+
+# Displaying the results
+display_images([image, bilinear_img, bicubic_img, arbhi_img, laplacian_img],
+               ["Original", "Bilinear Interpolation", "Bicubic Interpolation", "ARBH Interpolation", "Laplacian Interpolation"])
+
 # Function to perform region growing
 def region_growing(image, seed, threshold):
     height, width = image.shape
